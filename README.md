@@ -1,6 +1,6 @@
 ---
 title: "README.md"
-author: "Valentín Gallego"
+author: "valro.gallego"
 date: "August 18, 2014"
 output: html_document
 ---
@@ -31,6 +31,13 @@ https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Datas
 
 Good luck!
 
+Code Instructions
+-----------------
+
+1. Edit the file `run_analysis.r` 
+2. Change the value of parameter `my_wd` for your working directory
+3. Save your changes.
+4. Run the R script `run_analysis.r`. This execute the file `run_analysis.Rmd` for obtaining the codebook.
 
 
 ```
