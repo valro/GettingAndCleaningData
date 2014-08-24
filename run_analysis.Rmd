@@ -1,0 +1,268 @@
+---
+title: "run_analysis.Rmd"
+author: "valro"
+date: "August 18, 2014"
+output: html_document
+---
+run_analysis
+============
+Last updated `r as.character(Sys.time())` using `r R.version$version.string`.
+
+[Parameters for the project](https://class.coursera.org/getdata-006/human_grading/view/courses/972584/assessments/3/submissions)
+---------------------------
+
+The purpose of this project is to demonstrate your ability to collect, work with, and clean a data set. The goal is to prepare tidy data that can be used for later analysis. You will be graded by your peers on a series of yes/no questions related to the project. You will be required to submit: 1) a tidy data set as described below, 2) a link to a Github repository with your script for performing the analysis, and 3) a code book that describes the variables, the data, and any transformations or work that you performed to clean up the data called CodeBook.md. You should also include a README.md in the repo with your scripts. This repo explains how all of the scripts work and how they are connected. 
+
+One of the most exciting areas in all of data science right now is wearable computing - see for example this article . Companies like Fitbit, Nike, and Jawbone Up are racing to develop the most advanced algorithms to attract new users. The data linked to from the course website represent data collected from the accelerometers from the Samsung Galaxy S smartphone. A full description is available at the site where the data was obtained:
+
+http://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
+
+Here are the data for the project:
+
+https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip
+
+ You should create one R script called run_analysis.R that does the following. 
+
+    Merges the training and the test sets to create one data set.
+    Extracts only the measurements on the mean and standard deviation for each measurement. 
+    Uses descriptive activity names to name the activities in the data set
+    Appropriately labels the data set with descriptive variable names. 
+    Creates a second, independent tidy data set with the average of each variable for each activity and each subject. 
+
+Good luck!
+
+Code for this project
+=====================
+
+Clean objects and set working directory variable
+------------------------------------------------
+
+```{r}
+rm(list = ls())
+my_wd <- "~/Documents/my_r_code/GettingAndCleaningData/Project"
+setwd(my_wd)
+```
+
+Load packages and assign full path
+----------------------------------
+
+```{r}
+
+packages <- c("data.table", "reshape2", "gdata")
+sapply(packages, library, character.only = TRUE, quietly = TRUE)
+
+# Assign working directory
+full_wd <- getwd()
+
+```
+
+Get data and put it in the data directory as usual
+--------------------------------------------------
+
+```{r}
+dataUrl <- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+path_data <- file.path(full_wd, "data")
+if(!exists(path_data)){ dir.create (path_data)}
+dest_file <- file.path(path_data, "Dataset.zip")
+```
+Download the zip file
+```{r eval=FALSE}
+download.file(dataUrl, destfile = dest_file, method = "curl", quiet = TRUE )
+```
+
+Show some information of the downloaded file
+-------------------------------------------
+
+```{r}
+dest_file_info <- file.info(dest_file)
+dt_size <- dest_file_info$size
+dt_atime <- dest_file_info$atime
+dt_sizeh <- humanReadable(dt_size)
+
+dest_file_info
+dt_size
+dt_atime
+dt_sizeh
+```
+
+Decompress the file with size of `dt_sizeh ` in ` path_data`
+-----------------------------------------------------------
+```{r}
+syscmd <- paste0("unzip ", dest_file, " -d", path_data)
+system(syscmd)
+pathIn <- file.path(path_data, "UCI HAR Dataset")
+list.files(pathIn, recursive = TRUE)
+```
+** Read the `README.txt` file in `pathIn` **
+
+Read the subject, test, activity and data files
+-----------------------------------------------
+
+Subject files.
+
+```{r}
+dtSubjectTrain <- fread(file.path(pathIn, "train", "subject_train.txt"))
+dtSubjectTest  <- fread(file.path(pathIn, "test" , "subject_test.txt" ))
+```
+
+Activity files.
+
+```{r}
+dtActivityTrain <- fread(file.path(pathIn, "train", "Y_train.txt"))
+dtActivityTest  <- fread(file.path(pathIn, "test" , "Y_test.txt" ))
+```
+
+Data files
+
+```{r dataFilesToDataTable} 
+dataFilesToDataTable <- function (thefile) {
+        data_f <- read.table(thefile)
+        data_t <- data.table(data_f)
+}
+dtTrain <- dataFilesToDataTable(file.path(pathIn, "train", "X_train.txt"))
+dtTest  <- dataFilesToDataTable(file.path(pathIn, "test" , "X_test.txt" ))
+```
+1. Merges the training and the test sets to create one data set.
+---------------------------------------------------------------
+
+Concatenate the tables.
+
+```{r}
+dtSubject <- rbind(dtSubjectTrain, dtSubjectTest)
+setnames(dtSubject, "V1", "subject")
+dtActivity <- rbind(dtActivityTrain, dtActivityTest)
+setnames(dtActivity, "V1", "activityNum")
+dt <- rbind(dtTrain, dtTest)
+````
+
+Merge colunms.
+
+```{r}
+dtSubject <- cbind(dtSubject, dtActivity)
+dt <- cbind(dtSubject, dt)
+```
+Set key.
+
+```{r}
+setkey(dt, subject, activityNum)
+```
+2. Extracts only the measurements on the mean and standard deviation for each measurement.
+------------------------------------------------------------------------------------------
+The `features.txt` file design the variables for the mean and standard deviation
+
+```{r}
+dtFeatures <- fread(file.path(pathIn, "features.txt"))
+setnames(dtFeatures, names(dtFeatures), c("featureNum", "featureName"))
+```
+Extracts only the measurements on the mean and standard deviation
+
+```{r}
+dtFeatures <- dtFeatures[grepl("mean\\(\\)|std\\(\\)", featureName)]
+```
+
+Convert the column numbers to a vector names
+
+```{r}
+dtFeatures$featureCode <- dtFeatures[, paste0("V", featureNum)]
+head(dtFeatures)
+dtFeatures$featureCode
+```
+
+Extract using variable names
+
+```{r}
+select <- c(key(dt), dtFeatures$featureCode)
+dt <- dt[, select, with=FALSE]
+head(dt, n=3)
+```
+
+3. Uses descriptive activity names to name the activities in the data set.
+--------------------------------------------------------------------------
+The file `activity_labels.txt` contents the descriptive activity names to name 
+the activities in the data set.
+
+```{r}
+dtActivityNames <- fread(file.path(pathIn, "activity_labels.txt"))
+setnames(dtActivityNames, names(dtActivityNames), c("activityNum", 
+                                                    "activityName"))
+```
+Merge activity labels.
+
+```{r}
+dt <- merge(dt, dtActivityNames, by="activityNum", all.x=TRUE)
+```
+
+Add `activityName` as a key.
+
+```{r}
+setkey(dt, subject, activityNum, activityName)
+```
+
+Melt the data table for reshaping 
+
+```{r}
+dt <- data.table(melt(dt, key(dt), variable.name="featureCode"))
+```
+
+Merge activity name.
+```{r}
+dt <- merge(dt, dtFeatures[, list(featureNum, featureCode, featureName)], by="featureCode", all.x=TRUE)
+```
+
+Create a new variable, `activity` that is equivalent to `activityName` as a factor class.
+Create a new variable, `feature` that is equivalent to `featureName` as a factor class.
+
+```{r}
+dt$activity <- factor(dt$activityName)
+dt$feature <- factor(dt$featureName)
+```
+Separate features from `featureName` using the helper function `grepthis`.
+
+```{r grepthis}
+grepthis <- function (regex) {
+  grepl(regex, dt$feature)
+}
+## Features with 2 categories
+n <- 2
+y <- matrix(seq(1, n), nrow=n)
+x <- matrix(c(grepthis("^t"), grepthis("^f")), ncol=nrow(y))
+dt$featDomain <- factor(x %*% y, labels=c("Time", "Freq"))
+x <- matrix(c(grepthis("Acc"), grepthis("Gyro")), ncol=nrow(y))
+dt$featInstrument <- factor(x %*% y, labels=c("Accelerometer", "Gyroscope"))
+x <- matrix(c(grepthis("BodyAcc"), grepthis("GravityAcc")), ncol=nrow(y))
+dt$featAcceleration <- factor(x %*% y, labels=c(NA, "Body", "Gravity"))
+x <- matrix(c(grepthis("mean()"), grepthis("std()")), ncol=nrow(y))
+dt$featVariable <- factor(x %*% y, labels=c("Mean", "SD"))
+## Features with 1 category
+dt$featJerk <- factor(grepthis("Jerk"), labels=c(NA, "Jerk"))
+dt$featMagnitude <- factor(grepthis("Mag"), labels=c(NA, "Magnitude"))
+## Features with 3 categories
+n <- 3
+y <- matrix(seq(1, n), nrow=n)
+x <- matrix(c(grepthis("-X"), grepthis("-Y"), grepthis("-Z")), ncol=nrow(y))
+dt$featAxis <- factor(x %*% y, labels=c(NA, "X", "Y", "Z"))
+```
+
+Check to make sure all possible combinations of `feature` are accounted for by all possible combinations of the factor class variables.
+
+```{r}
+r1 <- nrow(dt[, .N, by=c("feature")])
+r2 <- nrow(dt[, .N, by=c("featDomain", "featAcceleration", "featInstrument", "featJerk", "featMagnitude", "featVariable", "featAxis")])
+r1 == r2
+```
+5. Creates a second, independent tidy data set with the average of each variable for each activity and each subject. 
+--------------------------------------------------------------------------------------------------------------------
+
+```{r}
+setkey(dt, subject, activity, featDomain, featAcceleration, featInstrument, featJerk, featMagnitude, featVariable, featAxis)
+dtTidy <- dt[, list(count = .N, average = mean(value)), by=key(dt)]
+```
+
+Make codebook.
+
+```{r}
+knit("makeCodebook.Rmd", output="codebook.md", encoding="UTF-8", quiet=TRUE)
+markdownToHTML("codebook.md", "codebook.html")
+```
+
+                                                     
